@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: t2s-enrollment
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: t2s-enrollment
+  template:
+    metadata:
+      labels:
+        app: t2s-enrollment
+    spec:
+      containers:
+      - name: t2s-enrollment
+        image: "<AWS_ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/t2s-enrollment:latest"
+        ports:
+        - containerPort: 80
