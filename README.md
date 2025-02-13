@@ -34,10 +34,101 @@ rancher/rancher:latest
 ## Step 2: Connect or Create a Kubernetes Cluster
 
 ### 1. Option 1: Create a Kubernetes Cluster
-1.	In Rancher, go to **Clusters** > **Create** > **Custom Cluster**.
+#### 1. Create your EKS Cluster
+- Create a backend storage for your Terraform state file.
+- Once in the backend-setup directory, change variables accordingly.  
+```bash
+cd eks-cluster/backend-setup
+```
+- Run the following commands: 
+```bash
+terraform init
+terraform plan
+terraform apply
+```
 
-2.	Follow the instructions to create a Kubernetes cluster.
+#### Move to the desired environment where to deploy the EKS cluster
+```bash
+cd ../environments/dev
+```
+- Change variables as desired. 
+- Run the following commands: 
+```bash
+terraform init
+terraform plan
+terraform apply
+```
 
+#### Steps to Deploy t2s-enrollment Application on AWS EKS
+
+**Step 1: Build & Push Docker Image to AWS ECR**
+- Create an ECR Repository
+```bash
+aws ecr create-repository --repository-name t2s-enrollment --region us-east-1
+```
+
+- Retrieve AWS Account ID
+```bash
+AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query "Account" --output text)
+```
+
+- Authenticate Docker to AWS ECR
+```bash
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com
+```
+
+- Build Docker Image
+```bash
+docker build -t t2s-enrollment .
+```
+
+- Tag the Docker Image
+```bash
+docker tag t2s-enrollment:latest $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/t2s-enrollment:latest
+```
+
+- Push the Image to ECR
+```bash
+docker push $AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com/t2s-enrollment:latest
+```
+
+**Step 2: Deploy the Application on Kubernetes**
+- Create a Secret for AWS ECR Authentication
+```bash
+kubectl create secret docker-registry ecr-secret \
+  --docker-server=$AWS_ACCOUNT_ID.dkr.ecr.us-east-1.amazonaws.com \
+  --docker-username=AWS \
+  --docker-password=$(aws ecr get-login-password --region us-east-1) \
+  --namespace default
+```
+
+- Apply the Deployment & Service
+```bash
+kubectl apply -f manifests/deployment.yaml
+kubectl apply -f manifests/service.yaml
+```
+
+- Verify Deployment
+```bash
+kubectl get pods
+kubectl get services
+```
+
+- Get the External Load Balancer URL & Access the Application
+```bash
+kubectl get svc t2s-enrollment-service
+```
+
+- Open in browser:
+```txt
+http://<EXTERNAL-IP>
+```
+
+#### 2.	In Rancher, go to **Clusters** > **Create** > **Custom Cluster**.
+
+- **Follow the instructions to create a Kubernetes cluster.**
+
+---
 ### 2. Option 2: Import an Existing Cluster
 1.	Go to **Clusters > Import Existing Cluster**.
 
@@ -51,6 +142,7 @@ rancher/rancher:latest
 2.	Select the namespace and create a new Helm chart.
 
 3.	Use the following configuration for the NGINX application:
+- Find in the deployment directory. 
 
 **values.yaml** File
 ```yaml
